@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,3 +28,15 @@ jobs:
         with:
           name: FotosEnCarpetas-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      # Publica el APK en la sección "Releases" para descargarlo directo desde el celular.
+      - name: Publicar APK en Releases
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk FotosEnCarpetas.apk
+          gh release delete ultima-version --yes --cleanup-tag || true
+          gh release create ultima-version FotosEnCarpetas.apk \
+            --title "Fotos en Carpetas (última versión)" \
+            --notes "Descarga FotosEnCarpetas.apk e instálalo en tu celular Android (7.0 o superior)."
