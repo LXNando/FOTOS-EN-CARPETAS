@@ -111,6 +111,59 @@ final class Storage {
         }
     }
 
+    // ---------- Notas ----------
+
+    /** La nota de una foto es un .txt con el mismo nombre, en la misma carpeta (IMG_1.jpg → IMG_1.txt). */
+    static File noteFile(File photo) {
+        String n = photo.getName();
+        int dot = n.lastIndexOf('.');
+        String base = dot > 0 ? n.substring(0, dot) : n;
+        return new File(photo.getParentFile(), base + ".txt");
+    }
+
+    static boolean hasNote(File photo) {
+        File n = noteFile(photo);
+        return n.isFile() && n.length() > 0;
+    }
+
+    /** Texto de la nota, o "" si no tiene. */
+    static String readNote(File photo) {
+        File n = noteFile(photo);
+        if (!n.isFile()) return "";
+        try (java.io.InputStream in = new java.io.FileInputStream(n)) {
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int r;
+            while ((r = in.read(buf)) > 0) out.write(buf, 0, r);
+            String s = new String(out.toByteArray(), java.nio.charset.StandardCharsets.UTF_8);
+            if (s.startsWith("﻿")) s = s.substring(1);
+            return s.trim();
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    /** Guarda la nota; si el texto está vacío, la borra. */
+    static boolean writeNote(File photo, String text) {
+        File n = noteFile(photo);
+        text = text == null ? "" : text.trim();
+        if (text.isEmpty()) return !n.exists() || n.delete();
+        try (java.io.OutputStream out = new java.io.FileOutputStream(n)) {
+            out.write(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** Borra una foto junto con su nota. */
+    static boolean deletePhoto(File photo) {
+        File n = noteFile(photo);
+        boolean ok = photo.delete() || !photo.exists();
+        if (ok && n.exists()) n.delete();
+        return ok;
+    }
+
     static boolean deleteRecursive(File f) {
         if (f.isDirectory()) {
             File[] fs = f.listFiles();

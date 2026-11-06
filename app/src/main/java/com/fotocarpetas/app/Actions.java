@@ -79,6 +79,50 @@ final class Actions {
         et.requestFocus();
     }
 
+    /** Diálogo para escribir, editar o borrar la nota de una foto. */
+    static void editNote(Activity a, final File photo, final Runnable onSaved) {
+        final String current = Storage.readNote(photo);
+        final EditText et = new EditText(a);
+        et.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        et.setSingleLine(false);
+        et.setMinLines(4);
+        et.setMaxLines(10);
+        et.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        et.setHint("Escribe una observación sobre esta foto…");
+        et.setText(current);
+        et.setSelection(et.getText().length());
+        FrameLayout box = new FrameLayout(a);
+        int p = MainActivity.dp(a, 22);
+        box.setPadding(p, MainActivity.dp(a, 8), p, 0);
+        box.addView(et);
+
+        AlertDialog.Builder b = new AlertDialog.Builder(a)
+                .setTitle(current.isEmpty() ? "Agregar nota" : "Editar nota")
+                .setView(box)
+                .setPositiveButton("Guardar", (d, w) -> {
+                    if (Storage.writeNote(photo, et.getText().toString())) {
+                        if (onSaved != null) onSaved.run();
+                    } else {
+                        Toast.makeText(a, "No se pudo guardar la nota", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton("Cancelar", null);
+        if (!current.isEmpty()) {
+            b.setNeutralButton("Borrar nota", (d, w) -> confirm(a, "¿Borrar la nota?",
+                    "Se borrará solo la nota; la foto se conserva.", "Borrar", () -> {
+                        Storage.writeNote(photo, "");
+                        if (onSaved != null) onSaved.run();
+                    }));
+        }
+        AlertDialog dialog = b.create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        }
+        dialog.show();
+        et.requestFocus();
+    }
+
     static void confirm(Activity a, String title, String message, String yes, Runnable onYes) {
         new AlertDialog.Builder(a)
                 .setTitle(title)
@@ -104,6 +148,15 @@ final class Actions {
             i.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris);
         }
         i.setType("image/*");
+        StringBuilder notes = new StringBuilder();
+        for (File f : photos) {
+            String note = Storage.readNote(f);
+            if (note.isEmpty()) continue;
+            if (notes.length() > 0) notes.append("\n\n");
+            if (photos.size() > 1) notes.append(f.getName()).append(":\n");
+            notes.append(note);
+        }
+        if (notes.length() > 0) i.putExtra(Intent.EXTRA_TEXT, notes.toString());
         ClipData clip = ClipData.newRawUri("foto", uris.get(0));
         for (int k = 1; k < uris.size(); k++) clip.addItem(new ClipData.Item(uris.get(k)));
         i.setClipData(clip);
@@ -162,6 +215,17 @@ final class Actions {
                     while ((r = in.read(buf)) > 0) zip.write(buf, 0, r);
                 }
                 zip.closeEntry();
+                File note = Storage.noteFile(f);
+                if (note.isFile() && note.length() > 0) {
+                    java.util.zip.ZipEntry ne = new java.util.zip.ZipEntry(prefix + note.getName());
+                    ne.setTime(note.lastModified());
+                    zip.putNextEntry(ne);
+                    try (InputStream in = new FileInputStream(note)) {
+                        int r;
+                        while ((r = in.read(buf)) > 0) zip.write(buf, 0, r);
+                    }
+                    zip.closeEntry();
+                }
                 done[0]++;
                 if (progress != null) progress.update(done[0], total);
             }

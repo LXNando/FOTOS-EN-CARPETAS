@@ -337,6 +337,10 @@ public class MainActivity extends Activity {
             labels.add("Tomar foto aquí");
             actions.add(() -> { current = f; refresh(); takePhoto(); });
         }
+        if (!dir) {
+            labels.add(Storage.hasNote(f) ? "📝 Editar nota" : "📝 Agregar nota");
+            actions.add(() -> Actions.editNote(this, f, this::refresh));
+        }
         labels.add("Renombrar");
         actions.add(() -> rename(f));
         labels.add(dir ? "Compartir fotos" : "Compartir");
@@ -375,12 +379,21 @@ public class MainActivity extends Activity {
             if (target.equals(f)) return;
             if (target.exists()) {
                 Toast.makeText(this, "Ya existe un elemento con ese nombre", Toast.LENGTH_SHORT).show();
-            } else if (f.renameTo(target)) {
+            } else if (!dir && Storage.noteFile(target).exists() && Storage.hasNote(f)) {
+                Toast.makeText(this, "Ya existe una nota con ese nombre", Toast.LENGTH_SHORT).show();
+            } else if (moveWithNote(f, target, dir)) {
                 refresh();
             } else {
                 Toast.makeText(this, "No se pudo renombrar", Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    private static boolean moveWithNote(File f, File target, boolean dir) {
+        File oldNote = dir ? null : Storage.noteFile(f);
+        if (!f.renameTo(target)) return false;
+        if (oldNote != null && oldNote.exists()) oldNote.renameTo(Storage.noteFile(target));
+        return true;
     }
 
     private void delete(final File f) {
@@ -395,8 +408,9 @@ public class MainActivity extends Activity {
                         refresh();
                     });
         } else {
-            Actions.confirm(this, "¿Eliminar esta foto?", "Esta acción no se puede deshacer.", "Eliminar", () -> {
-                f.delete();
+            Actions.confirm(this, "¿Eliminar esta foto?",
+                    (Storage.hasNote(f) ? "También se borrará su nota. " : "") + "Esta acción no se puede deshacer.", "Eliminar", () -> {
+                Storage.deletePhoto(f);
                 refresh();
             });
         }
@@ -519,6 +533,7 @@ public class MainActivity extends Activity {
                 if (convert == null) convert = newPhotoCell();
                 ImageView iv = (ImageView) ((ViewGroup) convert).getChildAt(0);
                 ImageLoader.get().loadThumb(iv, f, thumbSize);
+                ((ViewGroup) convert).getChildAt(1).setVisibility(Storage.hasNote(f) ? View.VISIBLE : View.GONE);
             }
             return convert;
         }
@@ -576,6 +591,19 @@ public class MainActivity extends Activity {
             iv.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
             iv.setClipToOutline(true);
             cell.addView(iv, new FrameLayout.LayoutParams(-1, -1));
+
+            TextView badge = new TextView(MainActivity.this);
+            badge.setText("📝");
+            badge.setTextSize(13);
+            badge.setGravity(Gravity.CENTER);
+            GradientDrawable bb = new GradientDrawable();
+            bb.setShape(GradientDrawable.OVAL);
+            bb.setColor(0xE6FFFFFF);
+            badge.setBackground(bb);
+            badge.setElevation(dp(2));
+            FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(dp(28), dp(28), Gravity.BOTTOM | Gravity.END);
+            blp.setMargins(0, 0, dp(5), dp(5));
+            cell.addView(badge, blp);
             return cell;
         }
     }

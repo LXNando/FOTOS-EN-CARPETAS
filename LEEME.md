@@ -5,6 +5,9 @@ App para celular Android que funciona **sin internet**:
 - Crear carpetas y subcarpetas (sin límite de niveles).
 - Entrar a una carpeta y tocar **📷 Tomar foto**: la foto se guarda directamente en esa carpeta.
 - Ver las fotos a pantalla completa: deslizar para pasar, pellizcar o doble toque para hacer zoom.
+- **Notas por foto**: en el visor toca «📝 Nota» para escribir una observación. Se muestra sobre la foto,
+  las fotos con nota llevan un 📝 en la cuadrícula, y la nota se guarda como `.txt` con el mismo nombre
+  de la foto (va incluida en los ZIP y se envía como texto al compartir).
 - Mantener presionada una carpeta o foto para: renombrar, compartir, copiar a la Galería o eliminar.
 - Opción **«Seguir tomando fotos»** (menú ⋮): después de cada foto se vuelve a abrir la cámara, ideal para tomar muchas seguidas.
 - **«Descargar como ZIP»**: guarda una carpeta completa (con subcarpetas y fotos) en un solo archivo .zip, donde elijas: Descargas, Google Drive, etc.

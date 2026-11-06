@@ -30,13 +30,15 @@ public class ViewerActivity extends Activity implements ZoomImageView.Listener {
     static final String EXTRA_FOLDER = "carpeta";
     static final String EXTRA_FILE = "archivo";
 
-    private static final int M_SHARE = 1, M_DELETE = 2, M_INFO = 3;
+    private static final int M_SHARE = 1, M_DELETE = 2, M_INFO = 3, M_NOTE = 4;
 
     private List<File> photos;
     private int index;
     private File folder;
     private ZoomImageView image;
     private ProgressBar spinner;
+    private android.widget.TextView noteView;
+    private boolean chromeVisible = true;
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private int token;
@@ -63,6 +65,18 @@ public class ViewerActivity extends Activity implements ZoomImageView.Listener {
         box.addView(image, new FrameLayout.LayoutParams(-1, -1));
         spinner = new ProgressBar(this);
         box.addView(spinner, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+
+        noteView = new android.widget.TextView(this);
+        noteView.setTextColor(0xFFFFFFFF);
+        noteView.setTextSize(15);
+        noteView.setLineSpacing(0, 1.15f);
+        noteView.setMaxLines(6);
+        noteView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        noteView.setBackgroundColor(0xB3000000);
+        int pad = MainActivity.dp(this, 14);
+        noteView.setPadding(pad, pad, pad, pad);
+        noteView.setOnClickListener(v -> editNote());
+        box.addView(noteView, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
         setContentView(box);
 
         ActionBar ab = getActionBar();
@@ -77,6 +91,7 @@ public class ViewerActivity extends Activity implements ZoomImageView.Listener {
             ab.setTitle((index + 1) + " de " + photos.size());
             ab.setSubtitle(folder.equals(Storage.root(this)) ? "Mis carpetas" : folder.getName());
         }
+        updateNote();
         final int my = ++token;
         spinner.setVisibility(android.view.View.VISIBLE);
         DisplayMetrics dm = getResources().getDisplayMetrics();
@@ -108,6 +123,20 @@ public class ViewerActivity extends Activity implements ZoomImageView.Listener {
         });
     }
 
+    private void updateNote() {
+        String note = Storage.readNote(photos.get(index));
+        noteView.setText("📝  " + note);
+        noteView.setVisibility(!note.isEmpty() && chromeVisible ? android.view.View.VISIBLE : android.view.View.GONE);
+    }
+
+    private void editNote() {
+        File f = photos.get(index);
+        Actions.editNote(this, f, () -> {
+            if (photos.get(index).equals(f)) updateNote();
+            Toast.makeText(this, Storage.hasNote(f) ? "Nota guardada" : "Nota borrada", Toast.LENGTH_SHORT).show();
+        });
+    }
+
     @Override
     public void onSwipe(int direction) {
         int next = index + direction;
@@ -123,12 +152,15 @@ public class ViewerActivity extends Activity implements ZoomImageView.Listener {
     public void onTap() {
         ActionBar ab = getActionBar();
         if (ab == null) return;
-        if (ab.isShowing()) ab.hide();
-        else ab.show();
+        chromeVisible = !ab.isShowing();
+        if (chromeVisible) ab.show();
+        else ab.hide();
+        updateNote();
     }
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
+        menu.add(0, M_NOTE, 0, "📝 Nota").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
         menu.add(0, M_SHARE, 0, "Compartir").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
         menu.add(0, M_DELETE, 1, "Eliminar").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
         menu.add(0, M_INFO, 2, "Información");
@@ -143,12 +175,16 @@ public class ViewerActivity extends Activity implements ZoomImageView.Listener {
             case android.R.id.home:
                 finish();
                 return true;
+            case M_NOTE:
+                editNote();
+                return true;
             case M_SHARE:
                 Actions.share(this, Collections.singletonList(f));
                 return true;
             case M_DELETE:
-                Actions.confirm(this, "¿Eliminar esta foto?", "Esta acción no se puede deshacer.", "Eliminar", () -> {
-                    if (!f.delete() && f.exists()) {
+                Actions.confirm(this, "¿Eliminar esta foto?",
+                        (Storage.hasNote(f) ? "También se borrará su nota. " : "") + "Esta acción no se puede deshacer.", "Eliminar", () -> {
+                    if (!Storage.deletePhoto(f)) {
                         Toast.makeText(this, "No se pudo eliminar", Toast.LENGTH_SHORT).show();
                         return;
                     }
