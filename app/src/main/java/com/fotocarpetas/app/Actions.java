@@ -115,6 +115,159 @@ final class Actions {
         }
     }
 
+    // ---------- ZIP ----------
+
+    interface Progress {
+        void update(int done, int total);
+    }
+
+    /** Nombre del ZIP (y de su carpeta principal) para una carpeta. */
+    static String zipBaseName(Activity a, File folder) {
+        return folder.equals(Storage.root(a)) ? "Mis carpetas" : folder.getName();
+    }
+
+    /** Escribe la carpeta completa (subcarpetas, fotos y carpetas vacías) dentro de un ZIP. */
+    static int writeZip(File folder, String baseName, OutputStream raw, Progress progress) throws java.io.IOException {
+        List<File> photos = new ArrayList<>();
+        Storage.collectPhotos(folder, photos);
+        final int total = photos.size();
+        final int[] done = {0};
+        byte[] buf = new byte[64 * 1024];
+        try (java.util.zip.ZipOutputStream zip = new java.util.zip.ZipOutputStream(new java.io.BufferedOutputStream(raw))) {
+            // Las fotos JPEG ya están comprimidas: guardarlas sin recomprimir es mucho más rápido.
+            zip.setLevel(java.util.zip.Deflater.NO_COMPRESSION);
+            addToZip(zip, folder, baseName + "/", buf, done, total, progress);
+        }
+        return done[0];
+    }
+
+    private static void addToZip(java.util.zip.ZipOutputStream zip, File dir, String prefix, byte[] buf,
+                                 int[] done, int total, Progress progress) throws java.io.IOException {
+        java.util.zip.ZipEntry dirEntry = new java.util.zip.ZipEntry(prefix);
+        dirEntry.setTime(dir.lastModified());
+        zip.putNextEntry(dirEntry);
+        zip.closeEntry();
+        File[] fs = dir.listFiles();
+        if (fs == null) return;
+        java.util.Arrays.sort(fs, (x, y) -> x.getName().compareToIgnoreCase(y.getName()));
+        for (File f : fs) {
+            if (f.isDirectory()) {
+                if (!f.getName().startsWith(".")) addToZip(zip, f, prefix + f.getName() + "/", buf, done, total, progress);
+            } else if (Storage.isPhoto(f) && f.length() > 0) {
+                java.util.zip.ZipEntry e = new java.util.zip.ZipEntry(prefix + f.getName());
+                e.setTime(f.lastModified());
+                zip.putNextEntry(e);
+                try (InputStream in = new FileInputStream(f)) {
+                    int r;
+                    while ((r = in.read(buf)) > 0) zip.write(buf, 0, r);
+                }
+                zip.closeEntry();
+                done[0]++;
+                if (progress != null) progress.update(done[0], total);
+            }
+        }
+    }
+
+    private static boolean isEmptyFolder(File folder) {
+        int[] c = Storage.deepCount(folder);
+        return c[0] + c[1] == 0;
+    }
+
+    interface StreamOpener {
+        OutputStream open() throws java.io.IOException;
+    }
+
+    /** Crea el ZIP en segundo plano mostrando el avance; al terminar llama a onDone en la pantalla. */
+    private static void zipWithProgress(final Activity a, final File folder, final StreamOpener opener,
+                                        final java.util.function.IntConsumer onDone) {
+        final AlertDialog progress = new AlertDialog.Builder(a)
+                .setTitle("Creando ZIP")
+                .setMessage("Preparando…")
+                .setCancelable(false)
+                .create();
+        progress.show();
+        final Handler ui = new Handler(Looper.getMainLooper());
+        final String base = zipBaseName(a, folder);
+        new Thread(() -> {
+            int count = -1;
+            try (OutputStream out = opener.open()) {
+                if (out == null) throw new java.io.IOException("sin salida");
+                count = writeZip(folder, base, out, (d, t) ->
+                        ui.post(() -> progress.setMessage("Foto " + d + " de " + t)));
+            } catch (Exception e) {
+                count = -1;
+            }
+            final int result = count;
+            ui.post(() -> {
+                progress.dismiss();
+                if (a.isFinishing()) return;
+                if (result < 0) {
+                    Toast.makeText(a, "No se pudo crear el ZIP. Revisa que haya espacio libre.", Toast.LENGTH_LONG).show();
+                } else {
+                    onDone.accept(result);
+                }
+            });
+        }).start();
+    }
+
+    static final int REQ_SAVE_ZIP = 2;
+
+    /** Abre el selector del sistema para elegir dónde guardar el ZIP (Descargas, Drive, etc.). */
+    static boolean startSaveZip(Activity a, File folder) {
+        if (isEmptyFolder(folder)) {
+            Toast.makeText(a, "La carpeta está vacía", Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType("application/zip");
+        i.putExtra(Intent.EXTRA_TITLE, zipBaseName(a, folder) + ".zip");
+        try {
+            a.startActivityForResult(i, REQ_SAVE_ZIP);
+            return true;
+        } catch (Exception e) {
+            Toast.makeText(a, "Este teléfono no permite elegir dónde guardar. Usa «Enviar como ZIP».", Toast.LENGTH_LONG).show();
+            return false;
+        }
+    }
+
+    /** Llamar con el destino que eligió el usuario en el selector del sistema. */
+    static void saveZipTo(final Activity a, File folder, final Uri dest) {
+        zipWithProgress(a, folder, () -> a.getContentResolver().openOutputStream(dest, "w"), n ->
+                new AlertDialog.Builder(a)
+                        .setTitle("ZIP guardado")
+                        .setMessage("Se guardó «" + zipBaseName(a, folder) + ".zip» con "
+                                + Storage.plural(n, "foto", "fotos")
+                                + " y todas sus carpetas, en la ubicación que elegiste.")
+                        .setPositiveButton("Aceptar", null)
+                        .show());
+    }
+
+    /** Crea el ZIP y lo comparte (WhatsApp, correo, Drive, Bluetooth…). */
+    static void shareZip(final Activity a, final File folder) {
+        if (isEmptyFolder(folder)) {
+            Toast.makeText(a, "La carpeta está vacía", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        File dir = PhotoProvider.zipCacheDir(a);
+        File[] old = dir.listFiles();
+        if (old != null) for (File f : old) f.delete();
+        final File zip = new File(dir, zipBaseName(a, folder) + ".zip");
+        zipWithProgress(a, folder, () -> new java.io.FileOutputStream(zip), n -> {
+            Uri uri = PhotoProvider.zipUriFor(a, zip);
+            Intent i = new Intent(Intent.ACTION_SEND);
+            i.setType("application/zip");
+            i.putExtra(Intent.EXTRA_STREAM, uri);
+            i.setClipData(ClipData.newRawUri("zip", uri));
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            try {
+                a.startActivity(Intent.createChooser(i, "Enviar ZIP"));
+            } catch (Exception e) {
+                Toast.makeText(a, "No hay apps para enviar el archivo", Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
     static boolean canExportToGallery() {
         return Build.VERSION.SDK_INT >= 29;
     }

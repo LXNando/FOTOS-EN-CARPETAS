@@ -34,10 +34,27 @@ public class PhotoProvider extends ContentProvider {
         return b.build();
     }
 
+    /** Segmento reservado para los ZIP temporales (los nombres de carpeta no pueden empezar con punto). */
+    private static final String ZIP_SEGMENT = ".zip";
+
+    static File zipCacheDir(Context c) {
+        File d = new File(c.getCacheDir(), "zip");
+        if (!d.exists()) d.mkdirs();
+        return d;
+    }
+
+    static Uri zipUriFor(Context c, File zip) {
+        return new Uri.Builder().scheme("content").authority(authority(c))
+                .appendPath(ZIP_SEGMENT).appendPath(zip.getName()).build();
+    }
+
     private File fileFor(Uri uri) throws FileNotFoundException {
-        File root = Storage.root(getContext());
+        java.util.List<String> segs = uri.getPathSegments();
+        boolean zip = !segs.isEmpty() && ZIP_SEGMENT.equals(segs.get(0));
+        File root = zip ? zipCacheDir(getContext()) : Storage.root(getContext());
         File f = root;
-        for (String seg : uri.getPathSegments()) {
+        for (int i = zip ? 1 : 0; i < segs.size(); i++) {
+            String seg = segs.get(i);
             if (seg.equals("..") || seg.equals(".") || seg.contains("/")) throw new FileNotFoundException();
             f = new File(f, seg);
         }
@@ -96,6 +113,7 @@ public class PhotoProvider extends ContentProvider {
         String n = uri.getLastPathSegment();
         if (n == null) return null;
         n = n.toLowerCase(Locale.ROOT);
+        if (n.endsWith(".zip")) return "application/zip";
         if (n.endsWith(".png")) return "image/png";
         if (n.endsWith(".webp")) return "image/webp";
         return "image/jpeg";

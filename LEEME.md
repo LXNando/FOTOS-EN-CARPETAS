@@ -7,6 +7,8 @@ App para celular Android que funciona **sin internet**:
 - Ver las fotos a pantalla completa: deslizar para pasar, pellizcar o doble toque para hacer zoom.
 - Mantener presionada una carpeta o foto para: renombrar, compartir, copiar a la Galería o eliminar.
 - Opción **«Seguir tomando fotos»** (menú ⋮): después de cada foto se vuelve a abrir la cámara, ideal para tomar muchas seguidas.
+- **«Descargar como ZIP»**: guarda una carpeta completa (con subcarpetas y fotos) en un solo archivo .zip, donde elijas: Descargas, Google Drive, etc.
+- **«Enviar como ZIP»**: crea el .zip y lo envía por WhatsApp, correo, Drive, Bluetooth…
 - **«Copiar a la Galería»** (Android 10+): copia las fotos al álbum `Pictures/FotoCarpetas`, respetando las mismas carpetas.
 
 No pide permiso de internet ni de cámara: usa la app de cámara del propio teléfono.

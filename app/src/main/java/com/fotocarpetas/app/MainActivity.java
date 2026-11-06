@@ -46,7 +46,7 @@ import java.util.Locale;
 public class MainActivity extends Activity {
 
     private static final int REQ_CAMERA = 1;
-    private static final int M_CONTINUOUS = 1, M_EXPORT = 2, M_INFO = 3, M_NEW_FOLDER = 4;
+    private static final int M_CONTINUOUS = 1, M_EXPORT = 2, M_INFO = 3, M_NEW_FOLDER = 4, M_ZIP_SAVE = 5, M_ZIP_SEND = 6;
     private static final String PREFS = "ajustes", KEY_CONTINUOUS = "seguir_tomando";
 
     static final int PRIMARY = 0xFF1E6F5C;
@@ -54,6 +54,7 @@ public class MainActivity extends Activity {
     private File root;
     private File current;
     private File pendingPhoto;
+    private File pendingZipFolder;
     private final List<File> items = new ArrayList<>();
     private int dirCount;
     private GridView grid;
@@ -82,6 +83,8 @@ public class MainActivity extends Activity {
             }
             String p = state.getString("pending");
             if (p != null) pendingPhoto = new File(p);
+            String z = state.getString("pendingZip");
+            if (z != null) pendingZipFolder = new File(z);
         }
         thumbSize = dp(150);
         buildUi();
@@ -222,6 +225,7 @@ public class MainActivity extends Activity {
         super.onSaveInstanceState(out);
         out.putString("current", current.getAbsolutePath());
         if (pendingPhoto != null) out.putString("pending", pendingPhoto.getAbsolutePath());
+        if (pendingZipFolder != null) out.putString("pendingZip", pendingZipFolder.getAbsolutePath());
     }
 
     // ---------- Menú ----------
@@ -236,6 +240,9 @@ public class MainActivity extends Activity {
         menu.add(0, M_CONTINUOUS, 1, "Seguir tomando fotos")
                 .setCheckable(true)
                 .setChecked(prefs().getBoolean(KEY_CONTINUOUS, false));
+        boolean atRoot = current.equals(root);
+        menu.add(0, M_ZIP_SAVE, 2, atRoot ? "Descargar todo como ZIP" : "Descargar esta carpeta como ZIP");
+        menu.add(0, M_ZIP_SEND, 2, atRoot ? "Enviar todo como ZIP" : "Enviar esta carpeta como ZIP");
         if (Actions.canExportToGallery()) {
             menu.add(0, M_EXPORT, 2, current.equals(root) ? "Copiar todo a la Galería" : "Copiar esta carpeta a la Galería");
         }
@@ -262,6 +269,12 @@ public class MainActivity extends Activity {
                 return true;
             case M_EXPORT:
                 Actions.exportToGallery(this, current);
+                return true;
+            case M_ZIP_SAVE:
+                saveZip(current);
+                return true;
+            case M_ZIP_SEND:
+                Actions.shareZip(this, current);
                 return true;
             case M_INFO:
                 showStorageInfo();
@@ -328,6 +341,12 @@ public class MainActivity extends Activity {
         actions.add(() -> rename(f));
         labels.add(dir ? "Compartir fotos" : "Compartir");
         actions.add(() -> Actions.share(this, dir ? Storage.listPhotos(f) : Collections.singletonList(f)));
+        if (dir) {
+            labels.add("Descargar como ZIP");
+            actions.add(() -> saveZip(f));
+            labels.add("Enviar como ZIP");
+            actions.add(() -> Actions.shareZip(this, f));
+        }
         if (dir && Actions.canExportToGallery()) {
             labels.add("Copiar a la Galería");
             actions.add(() -> Actions.exportToGallery(this, f));
@@ -339,6 +358,10 @@ public class MainActivity extends Activity {
                 .setTitle(f.getName())
                 .setItems(labels.toArray(new String[0]), (d, which) -> actions.get(which).run())
                 .show();
+    }
+
+    private void saveZip(File folder) {
+        if (Actions.startSaveZip(this, folder)) pendingZipFolder = folder;
     }
 
     private void rename(final File f) {
@@ -408,6 +431,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == Actions.REQ_SAVE_ZIP) {
+            File folder = pendingZipFolder;
+            pendingZipFolder = null;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null
+                    && folder != null && folder.isDirectory()) {
+                Actions.saveZipTo(this, folder, data.getData());
+            }
+            return;
+        }
         if (requestCode != REQ_CAMERA) return;
         File f = pendingPhoto;
         pendingPhoto = null;
