@@ -465,8 +465,7 @@ public class MainActivity extends Activity {
                         + "Ubicación:\n" + root.getAbsolutePath() + "\n\n"
                         + "Desde una computadora (cable USB) la encuentras en:\nAndroid › data › " + getPackageName()
                         + " › files › Pictures › " + Storage.ROOT_NAME + "\n\n"
-                        + "Carpetas de color naranja con 📝: contienen fotos con notas "
-                        + "(borde continuo = notas en esa carpeta; borde punteado = notas dentro de sus subcarpetas).\n\n"
+                        + "Carpetas de color naranja con 📝: contienen directamente fotos con notas.\n\n"
                         + "Importante: si desinstalas la app, Android borra estas fotos. "
                         + "Antes de desinstalar, usa «Copiar a la Galería» o «Compartir» para guardar una copia.")
                 .setPositiveButton("Entendido", null)
@@ -765,27 +764,25 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Carpeta con notas: fondo amarillo, ícono naranja con hoja y etiqueta «📝 N».
-     * Borde continuo = hay notas en esta carpeta; borde punteado = las notas están en sus subcarpetas.
+     * Carpeta que contiene directamente fotos con nota: fondo amarillo, ícono naranja con hoja y
+     * etiqueta «📝 N». Las carpetas superiores no se resaltan por notas de sus subcarpetas.
      */
     private void bindFolderNotes(FolderHolder h, File f) {
         int[] n = notesOf(f);
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(dp(14));
-        if (n[1] == 0) {
+        if (n[0] == 0) {
             bg.setColor(Color.WHITE);
             bg.setStroke(dp(1), 0xFFE1E6EA);
             h.icon.setImageResource(R.drawable.ic_folder);
             h.badge.setVisibility(View.GONE);
             h.meta.setTextColor(0xFF7A8790);
         } else {
-            boolean direct = n[0] > 0;
-            bg.setColor(direct ? 0xFFFFF1D6 : 0xFFFFF8EA);
-            if (direct) bg.setStroke(dp(2), 0xFFF28C38);
-            else bg.setStroke(dp(2), 0xFFF2A541, dp(6), dp(4));
+            bg.setColor(0xFFFFF1D6);
+            bg.setStroke(dp(2), 0xFFF28C38);
             h.icon.setImageResource(R.drawable.ic_folder_note);
             h.badge.setVisibility(View.VISIBLE);
-            h.badge.setText("📝 " + n[1]);
+            h.badge.setText("📝 " + n[0]);
             h.meta.setTextColor(0xFFB4561A);
         }
         h.card.setBackground(bg);
@@ -831,12 +828,7 @@ public class MainActivity extends Activity {
                 else if (c[1] == 0) meta = Storage.plural(c[0], "carpeta", "carpetas");
                 else meta = c[1] + " fotos · " + c[0] + " carp.";
                 int[] notes = notesOf(f);
-                if (notes[1] > 0) {
-                    meta = notes[0] > 0
-                            ? Storage.plural(notes[1], "nota", "notas")
-                            + (notes[0] < notes[1] ? " (" + notes[0] + " aquí)" : "")
-                            : Storage.plural(notes[1], "nota", "notas") + " en subcarpetas";
-                }
+                if (notes[0] > 0) meta = Storage.plural(notes[0], "foto con nota", "fotos con nota");
                 h.meta.setText(meta);
                 bindFolderNotes(h, f);
                 bindSelection(convert, f);
