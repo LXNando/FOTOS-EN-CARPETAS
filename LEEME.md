@@ -17,7 +17,7 @@ App para celular Android que funciona **sin internet**:
   como «Nombre (2)», sin borrar nada. Las notas se mueven con su foto.
 - **Exportar a Excel** (menú ⋮ o mantener presionada una carpeta): copia la lista de carpetas
   (o de fotos y notas) para pegarla directo en Excel, o crea un archivo .xlsx con dos hojas:
-  «Carpetas» (N°, Nivel 1, Nivel 2…, ruta, fotos, fotos con nota, subcarpetas y las notas de sus fotos)
+  «Carpetas» (N°, Nivel 1, Nivel 2…, Notas de las fotos)
   y «Fotos y notas» (una fila por foto con su carpeta, fecha y nota). Incluye título, resumen,
   encabezados fijos, filtros, colores por grupo y está lista para imprimir en horizontal.
 - Mantener presionada una carpeta o foto para: renombrar, compartir, copiar a la Galería o eliminar.

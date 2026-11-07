@@ -366,7 +366,7 @@ final class Actions {
                 .setTitle("Lista copiada")
                 .setMessage("Se copiaron " + Storage.plural(rows, photos ? "foto" : "carpeta", photos ? "fotos" : "carpetas")
                         + (photos ? " con sus columnas (N°, Nivel 1, Nivel 2…, Foto, Fecha, Nota).\n\n"
-                        : " con sus columnas (N°, Nivel 1, Nivel 2…, Fotos, Notas de las fotos).\n\n")
+                        : " con sus columnas (N°, Nivel 1, Nivel 2…, Notas de las fotos).\n\n")
                         + "En Excel, haz clic en la celda donde quieres que empiece la tabla y pega (Ctrl+V, o mantener presionado › Pegar). "
                         + "Cada dato se ubicará en su propia celda.\n\n"
                         + "Si lo pegas en WhatsApp o un correo para pasarlo a la computadora, luego cópialo desde ahí y pégalo en Excel.")

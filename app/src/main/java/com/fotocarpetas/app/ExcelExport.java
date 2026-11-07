@@ -112,7 +112,7 @@ final class ExcelExport {
                 + "   ·   " + Storage.plural(notes, "foto con nota", "fotos con nota");
     }
 
-    /** Hoja «Carpetas»: N° | Nivel 1…N | Ruta completa | Fotos | Con nota | Subcarpetas | Notas de las fotos */
+    /** Hoja «Carpetas»: N° | Nivel 1…N | Notas de las fotos */
     static Sheet folderSheet(File root, File base) {
         List<File> dirs = folders(root, base);
         int depth = maxDepth(root, dirs);
@@ -122,10 +122,6 @@ final class ExcelExport {
         s.info = summary(root, base);
         s.col("N°", 6.0);
         for (int i = 1; i <= depth; i++) s.col("Nivel " + i, null);
-        s.col("Ruta completa", null);
-        s.col("Fotos", 8.0);
-        s.col("Con nota", 10.0);
-        s.col("Subcarpetas", 13.0);
         s.col("Notas de las fotos", 60.0);
 
         int n = 1;
@@ -144,20 +140,14 @@ final class ExcelExport {
                 if (i < lv.length) r.add(new Cell(lv[i], i == lv.length - 1 ? BOLD : GRAY));
                 else r.add(new Cell("", TEXT));
             }
-            r.add(new Cell(String.join(" / ", lv), TEXT));
-            List<File> photos = photosInOrder(d);
+            // Solo el texto de cada nota; si hay varias, una por línea.
             StringBuilder notes = new StringBuilder();
-            int withNote = 0;
-            for (File p : photos) {
+            for (File p : photosInOrder(d)) {
                 String note = Storage.readNote(p);
                 if (note.isEmpty()) continue;
-                withNote++;
                 if (notes.length() > 0) notes.append('\n');
-                notes.append("• ").append(p.getName()).append(": ").append(note.replace("\n", "\n   "));
+                notes.append(note);
             }
-            r.add(new Cell(photos.size(), NUM));
-            r.add(new Cell(withNote, NUM));
-            r.add(new Cell(Storage.quickCount(d)[0], NUM));
             r.add(new Cell(notes.toString(), WRAP));
             s.rows.add(r);
             s.band.add(band);
