@@ -8,6 +8,10 @@ App para celular Android que funciona **sin internet**:
 - **Notas por foto**: en el visor toca «📝 Nota» para escribir una observación. Se muestra sobre la foto,
   las fotos con nota llevan un 📝 en la cuadrícula, y la nota se guarda como `.txt` con el mismo nombre
   de la foto (va incluida en los ZIP y se envía como texto al compartir).
+- **Mover carpetas y fotos**: mantener presionado › «📂 Mover a…» y elegir la carpeta de destino
+  (se puede crear una nueva desde ahí). Para mover varias a la vez: «☑ Seleccionar varias»,
+  marcar las que quieras y tocar «📂 Mover». Si ya existe algo con el mismo nombre, se renombra
+  como «Nombre (2)», sin borrar nada. Las notas se mueven con su foto.
 - Mantener presionada una carpeta o foto para: renombrar, compartir, copiar a la Galería o eliminar.
 - Opción **«Seguir tomando fotos»** (menú ⋮): después de cada foto se vuelve a abrir la cámara, ideal para tomar muchas seguidas.
 - **«Descargar como ZIP»**: guarda una carpeta completa (con subcarpetas y fotos) en un solo archivo .zip, donde elijas: Descargas, Google Drive, etc.

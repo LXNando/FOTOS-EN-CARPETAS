@@ -30,7 +30,7 @@ public class ViewerActivity extends Activity implements ZoomImageView.Listener {
     static final String EXTRA_FOLDER = "carpeta";
     static final String EXTRA_FILE = "archivo";
 
-    private static final int M_SHARE = 1, M_DELETE = 2, M_INFO = 3, M_NOTE = 4;
+    private static final int M_SHARE = 1, M_DELETE = 2, M_INFO = 3, M_NOTE = 4, M_MOVE = 5;
 
     private List<File> photos;
     private int index;
@@ -163,7 +163,8 @@ public class ViewerActivity extends Activity implements ZoomImageView.Listener {
         menu.add(0, M_NOTE, 0, "📝 Nota").setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
         menu.add(0, M_SHARE, 0, "Compartir").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
         menu.add(0, M_DELETE, 1, "Eliminar").setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM);
-        menu.add(0, M_INFO, 2, "Información");
+        menu.add(0, M_MOVE, 2, "Mover a otra carpeta…");
+        menu.add(0, M_INFO, 3, "Información");
         return true;
     }
 
@@ -177,6 +178,25 @@ public class ViewerActivity extends Activity implements ZoomImageView.Listener {
                 return true;
             case M_NOTE:
                 editNote();
+                return true;
+            case M_MOVE:
+                FolderPicker.show(this, "Mover esta foto", folder, folder,
+                        Collections.singletonList(f), dest -> {
+                            File moved = Storage.moveInto(f, dest);
+                            if (moved == null) {
+                                Toast.makeText(this, "No se pudo mover la foto", Toast.LENGTH_SHORT).show();
+                                return;
+                            }
+                            Toast.makeText(this, "Foto movida a «" + FolderPicker.name(Storage.root(this), dest) + "»",
+                                    Toast.LENGTH_SHORT).show();
+                            photos.remove(f);
+                            if (photos.isEmpty()) {
+                                finish();
+                                return;
+                            }
+                            if (index >= photos.size()) index = photos.size() - 1;
+                            show(0);
+                        });
                 return true;
             case M_SHARE:
                 Actions.share(this, Collections.singletonList(f));

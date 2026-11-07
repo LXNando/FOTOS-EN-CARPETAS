@@ -164,6 +164,53 @@ final class Storage {
         return ok;
     }
 
+    // ---------- Mover ----------
+
+    static boolean sameFile(File a, File b) {
+        if (a == null || b == null) return false;
+        try {
+            return a.getCanonicalPath().equals(b.getCanonicalPath());
+        } catch (IOException e) {
+            return a.getAbsolutePath().equals(b.getAbsolutePath());
+        }
+    }
+
+    /** Un nombre libre en destDir: si «Nombre» ya existe, prueba «Nombre (2)», «Nombre (3)»… */
+    static File uniqueTarget(File destDir, String name, boolean isDir) {
+        String base = name, ext = "";
+        if (!isDir) {
+            int dot = name.lastIndexOf('.');
+            if (dot > 0) {
+                base = name.substring(0, dot);
+                ext = name.substring(dot);
+            }
+        }
+        File t = new File(destDir, name);
+        int n = 2;
+        while (t.exists() || (!isDir && noteFile(t).exists())) {
+            t = new File(destDir, base + " (" + (n++) + ")" + ext);
+        }
+        return t;
+    }
+
+    /**
+     * Mueve una carpeta (con todo su contenido) o una foto (con su nota) dentro de destDir.
+     * Devuelve el archivo en su nueva ubicación, o null si no se pudo.
+     */
+    static File moveInto(File item, File destDir) {
+        if (!destDir.isDirectory() || !item.exists()) return null;
+        if (sameFile(item.getParentFile(), destDir)) return item;
+        boolean dir = item.isDirectory();
+        // Una carpeta no puede ir dentro de sí misma ni de sus subcarpetas.
+        if (dir && isInside(item, destDir)) return null;
+        File target = uniqueTarget(destDir, item.getName(), dir);
+        File note = dir ? null : noteFile(item);
+        boolean hadNote = note != null && note.isFile();
+        if (!item.renameTo(target)) return null;
+        if (hadNote) note.renameTo(noteFile(target));
+        return target;
+    }
+
     static boolean deleteRecursive(File f) {
         if (f.isDirectory()) {
             File[] fs = f.listFiles();

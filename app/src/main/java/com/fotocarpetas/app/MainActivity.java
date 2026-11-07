@@ -46,7 +46,8 @@ import java.util.Locale;
 public class MainActivity extends Activity {
 
     private static final int REQ_CAMERA = 1;
-    private static final int M_CONTINUOUS = 1, M_EXPORT = 2, M_INFO = 3, M_NEW_FOLDER = 4, M_ZIP_SAVE = 5, M_ZIP_SEND = 6;
+    private static final int M_CONTINUOUS = 1, M_EXPORT = 2, M_INFO = 3, M_NEW_FOLDER = 4, M_ZIP_SAVE = 5, M_ZIP_SEND = 6,
+            M_SELECT = 7, M_MOVE_SEL = 8, M_SELECT_ALL = 9, M_DELETE_SEL = 10;
     private static final String PREFS = "ajustes", KEY_CONTINUOUS = "seguir_tomando";
 
     static final int PRIMARY = 0xFF1E6F5C;
@@ -61,6 +62,10 @@ public class MainActivity extends Activity {
     private TextView emptyView;
     private Adapter adapter;
     private int thumbSize;
+    private Button leftBtn, rightBtn;
+    /** Modo selección: tocar marca/desmarca varias carpetas y fotos para moverlas o eliminarlas juntas. */
+    private boolean selecting;
+    private final java.util.LinkedHashSet<String> selected = new java.util.LinkedHashSet<>();
 
     static int dp(Context c, float v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, c.getResources().getDisplayMetrics());
@@ -85,6 +90,9 @@ public class MainActivity extends Activity {
             if (p != null) pendingPhoto = new File(p);
             String z = state.getString("pendingZip");
             if (z != null) pendingZipFolder = new File(z);
+            selecting = state.getBoolean("selecting", false);
+            ArrayList<String> sel = state.getStringArrayList("selected");
+            if (sel != null) selected.addAll(sel);
         }
         thumbSize = dp(150);
         buildUi();
@@ -124,8 +132,8 @@ public class MainActivity extends Activity {
         bar.setBackgroundColor(Color.WHITE);
         bar.setElevation(dp(10));
         bar.setPadding(dp(10), dp(10), dp(10), dp(10));
-        Button newFolder = makeButton("📁  Nueva carpeta", false);
-        Button photo = makeButton("📷  Tomar foto", true);
+        Button newFolder = leftBtn = makeButton("📁  Nueva carpeta", false);
+        Button photo = rightBtn = makeButton("📷  Tomar foto", true);
         LinearLayout.LayoutParams lp1 = new LinearLayout.LayoutParams(0, dp(56), 1f);
         lp1.rightMargin = dp(5);
         LinearLayout.LayoutParams lp2 = new LinearLayout.LayoutParams(0, dp(56), 1.25f);
@@ -134,14 +142,24 @@ public class MainActivity extends Activity {
         bar.addView(photo, lp2);
         page.addView(bar, new LinearLayout.LayoutParams(-1, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        newFolder.setOnClickListener(v -> createFolder());
-        photo.setOnClickListener(v -> takePhoto());
+        newFolder.setOnClickListener(v -> {
+            if (selecting) exitSelection();
+            else createFolder();
+        });
+        photo.setOnClickListener(v -> {
+            if (selecting) moveSelected();
+            else takePhoto();
+        });
 
         adapter = new Adapter();
         grid.setAdapter(adapter);
-        grid.setOnItemClickListener((parent, view, pos, id) -> open(items.get(pos)));
+        grid.setOnItemClickListener((parent, view, pos, id) -> {
+            if (selecting) toggle(items.get(pos));
+            else open(items.get(pos));
+        });
         grid.setOnItemLongClickListener((parent, view, pos, id) -> {
-            showOptions(items.get(pos));
+            if (selecting) toggle(items.get(pos));
+            else showOptions(items.get(pos));
             return true;
         });
 
@@ -187,6 +205,10 @@ public class MainActivity extends Activity {
         dirCount = dirs.size();
         items.addAll(dirs);
         items.addAll(Storage.listPhotos(current));
+        java.util.HashSet<String> present = new java.util.HashSet<>();
+        for (File f : items) present.add(f.getAbsolutePath());
+        selected.retainAll(present);
+        if (items.isEmpty()) selecting = false;
         adapter.notifyDataSetChanged();
 
         boolean atRoot = current.equals(root);
@@ -197,9 +219,127 @@ public class MainActivity extends Activity {
         if (ab != null) {
             ab.setTitle(atRoot ? "Mis carpetas" : current.getName());
             ab.setSubtitle(atRoot ? null : "Mis carpetas / " + Storage.relPath(root, current).replace("/", " / "));
-            ab.setDisplayHomeAsUpEnabled(!atRoot);
+            ab.setDisplayHomeAsUpEnabled(!atRoot || selecting);
+            if (selecting) {
+                ab.setTitle(selected.isEmpty() ? "Selecciona elementos"
+                        : Storage.plural(selected.size(), "seleccionado", "seleccionados"));
+                ab.setSubtitle("Toca carpetas o fotos para marcarlas");
+            }
         }
+        updateBar();
         invalidateOptionsMenu();
+    }
+
+    // ---------- Selección y mover ----------
+
+    private void updateBar() {
+        if (leftBtn == null) return;
+        if (selecting) {
+            leftBtn.setText("✕  Cancelar");
+            rightBtn.setText(selected.isEmpty() ? "📂  Mover" : "📂  Mover (" + selected.size() + ")");
+            rightBtn.setAlpha(selected.isEmpty() ? 0.5f : 1f);
+        } else {
+            leftBtn.setText("📁  Nueva carpeta");
+            rightBtn.setText("📷  Tomar foto");
+            rightBtn.setAlpha(1f);
+        }
+    }
+
+    private void startSelection(File first) {
+        selecting = true;
+        selected.clear();
+        if (first != null) selected.add(first.getAbsolutePath());
+        refresh();
+    }
+
+    private void exitSelection() {
+        selecting = false;
+        selected.clear();
+        refresh();
+    }
+
+    private void toggle(File f) {
+        String k = f.getAbsolutePath();
+        if (!selected.remove(k)) selected.add(k);
+        refresh();
+    }
+
+    private List<File> selectedFiles() {
+        List<File> out = new ArrayList<>();
+        for (File f : items) if (selected.contains(f.getAbsolutePath())) out.add(f);
+        return out;
+    }
+
+    private void moveSelected() {
+        List<File> list = selectedFiles();
+        if (list.isEmpty()) {
+            Toast.makeText(this, "Primero marca las carpetas o fotos que quieres mover", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        move(list);
+    }
+
+    /** Abre el selector de carpeta de destino y mueve los elementos. */
+    private void move(final List<File> list) {
+        String title = list.size() == 1
+                ? "Mover «" + list.get(0).getName() + "»"
+                : "Mover " + describe(list);
+        FolderPicker.show(this, title, current, current, list, dest -> {
+            int ok = 0, renamed = 0, failed = 0;
+            for (File f : list) {
+                File moved = Storage.moveInto(f, dest);
+                if (moved == null) failed++;
+                else {
+                    ok++;
+                    if (!moved.getName().equals(f.getName())) renamed++;
+                }
+            }
+            selecting = false;
+            selected.clear();
+            refresh();
+            StringBuilder msg = new StringBuilder();
+            if (ok > 0) msg.append(ok == 1 ? "Se movió 1 elemento" : "Se movieron " + ok + " elementos")
+                    .append(" a «").append(FolderPicker.name(root, dest)).append("».");
+            if (renamed > 0) msg.append(" ").append(renamed == 1 ? "1 se renombró" : renamed + " se renombraron")
+                    .append(" porque ya había uno con el mismo nombre.");
+            if (failed > 0) msg.append(msg.length() > 0 ? " " : "")
+                    .append(failed == 1 ? "1 no se pudo mover." : failed + " no se pudieron mover.");
+            Toast.makeText(this, msg.toString(), Toast.LENGTH_LONG).show();
+        });
+    }
+
+    private static String describe(List<File> list) {
+        int dirs = 0, photos = 0;
+        for (File f : list) if (f.isDirectory()) dirs++; else photos++;
+        if (dirs == 0) return Storage.plural(photos, "foto", "fotos");
+        if (photos == 0) return Storage.plural(dirs, "carpeta", "carpetas");
+        return Storage.plural(dirs, "carpeta", "carpetas") + " y " + Storage.plural(photos, "foto", "fotos");
+    }
+
+    private void deleteSelected() {
+        final List<File> list = selectedFiles();
+        if (list.isEmpty()) return;
+        int innerPhotos = 0;
+        boolean anyDir = false;
+        for (File f : list) {
+            if (f.isDirectory()) {
+                anyDir = true;
+                innerPhotos += Storage.deepCount(f)[1];
+            }
+        }
+        String detail = anyDir && innerPhotos > 0
+                ? "Las carpetas se borran con todo su contenido (" + Storage.plural(innerPhotos, "foto", "fotos") + " dentro). "
+                : "";
+        Actions.confirm(this, "¿Eliminar " + describe(list) + "?",
+                detail + "Esta acción no se puede deshacer.", "Eliminar", () -> {
+                    for (File f : list) {
+                        if (f.isDirectory()) Storage.deleteRecursive(f);
+                        else Storage.deletePhoto(f);
+                    }
+                    selecting = false;
+                    selected.clear();
+                    refresh();
+                });
     }
 
     private void navigate(File dir) {
@@ -216,7 +356,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (!current.equals(root)) goUp();
+        if (selecting) exitSelection();
+        else if (!current.equals(root)) goUp();
         else super.onBackPressed();
     }
 
@@ -226,6 +367,8 @@ public class MainActivity extends Activity {
         out.putString("current", current.getAbsolutePath());
         if (pendingPhoto != null) out.putString("pending", pendingPhoto.getAbsolutePath());
         if (pendingZipFolder != null) out.putString("pendingZip", pendingZipFolder.getAbsolutePath());
+        out.putBoolean("selecting", selecting);
+        out.putStringArrayList("selected", new ArrayList<>(selected));
     }
 
     // ---------- Menú ----------
@@ -236,7 +379,15 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
+        if (selecting) {
+            menu.add(0, M_MOVE_SEL, 0, "Mover a…")
+                    .setShowAsAction(MenuItem.SHOW_AS_ACTION_IF_ROOM | MenuItem.SHOW_AS_ACTION_WITH_TEXT);
+            menu.add(0, M_SELECT_ALL, 1, selected.size() == items.size() ? "Desmarcar todo" : "Seleccionar todo");
+            menu.add(0, M_DELETE_SEL, 2, "Eliminar seleccionados");
+            return true;
+        }
         menu.add(0, M_NEW_FOLDER, 0, "Nueva carpeta");
+        if (!items.isEmpty()) menu.add(0, M_SELECT, 0, "Seleccionar varias (mover)");
         menu.add(0, M_CONTINUOUS, 1, "Seguir tomando fotos")
                 .setCheckable(true)
                 .setChecked(prefs().getBoolean(KEY_CONTINUOUS, false));
@@ -254,7 +405,22 @@ public class MainActivity extends Activity {
     public boolean onOptionsItemSelected(MenuItem item) {
         switch (item.getItemId()) {
             case android.R.id.home:
-                goUp();
+                if (selecting) exitSelection();
+                else goUp();
+                return true;
+            case M_SELECT:
+                startSelection(null);
+                return true;
+            case M_MOVE_SEL:
+                moveSelected();
+                return true;
+            case M_SELECT_ALL:
+                if (selected.size() == items.size()) selected.clear();
+                else for (File f : items) selected.add(f.getAbsolutePath());
+                refresh();
+                return true;
+            case M_DELETE_SEL:
+                deleteSelected();
                 return true;
             case M_NEW_FOLDER:
                 createFolder();
@@ -341,6 +507,10 @@ public class MainActivity extends Activity {
             labels.add(Storage.hasNote(f) ? "📝 Editar nota" : "📝 Agregar nota");
             actions.add(() -> Actions.editNote(this, f, this::refresh));
         }
+        labels.add("📂 Mover a…");
+        actions.add(() -> move(Collections.singletonList(f)));
+        labels.add("☑ Seleccionar varias");
+        actions.add(() -> startSelection(f));
         labels.add("Renombrar");
         actions.add(() -> rename(f));
         labels.add(dir ? "Compartir fotos" : "Compartir");
@@ -485,6 +655,54 @@ public class MainActivity extends Activity {
         }
     }
 
+    private View makeSelectOverlay() {
+        FrameLayout ov = new FrameLayout(this);
+        ov.setTag("sel");
+        TextView check = new TextView(this);
+        check.setTag("chk");
+        check.setTextColor(Color.WHITE);
+        check.setTextSize(15);
+        check.setTypeface(Typeface.DEFAULT_BOLD);
+        check.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(dp(26), dp(26), Gravity.TOP | Gravity.START);
+        lp.setMargins(dp(6), dp(6), 0, 0);
+        ov.addView(check, lp);
+        ov.setVisibility(View.GONE);
+        return ov;
+    }
+
+    private void bindSelection(View cell, File f) {
+        View ov = cell.findViewWithTag("sel");
+        if (ov == null) return;
+        if (!selecting) {
+            ov.setVisibility(View.GONE);
+            return;
+        }
+        ov.setVisibility(View.VISIBLE);
+        boolean on = selected.contains(f.getAbsolutePath());
+        if (on) {
+            GradientDrawable bg = new GradientDrawable();
+            bg.setCornerRadius(dp(12));
+            bg.setColor(0x401E6F5C);
+            bg.setStroke(dp(3), PRIMARY);
+            ov.setBackground(bg);
+        } else {
+            ov.setBackground(null);
+        }
+        TextView check = (TextView) ov.findViewWithTag("chk");
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        if (on) {
+            circle.setColor(PRIMARY);
+            circle.setStroke(dp(2), Color.WHITE);
+        } else {
+            circle.setColor(0x55000000);
+            circle.setStroke(dp(2), Color.WHITE);
+        }
+        check.setBackground(circle);
+        check.setText(on ? "✓" : "");
+    }
+
     private static class FolderHolder {
         TextView name, meta;
     }
@@ -529,11 +747,13 @@ public class MainActivity extends Activity {
                 else if (c[1] == 0) meta = Storage.plural(c[0], "carpeta", "carpetas");
                 else meta = c[1] + " fotos · " + c[0] + " carp.";
                 h.meta.setText(meta);
+                bindSelection(convert, f);
             } else {
                 if (convert == null) convert = newPhotoCell();
                 ImageView iv = (ImageView) ((ViewGroup) convert).getChildAt(0);
                 ImageLoader.get().loadThumb(iv, f, thumbSize);
                 ((ViewGroup) convert).getChildAt(1).setVisibility(Storage.hasNote(f) ? View.VISIBLE : View.GONE);
+                bindSelection(convert, f);
             }
             return convert;
         }
@@ -575,6 +795,7 @@ public class MainActivity extends Activity {
             col.addView(h.meta, new LinearLayout.LayoutParams(-1, -2));
 
             cell.addView(col, new FrameLayout.LayoutParams(-1, -1));
+            cell.addView(makeSelectOverlay(), new FrameLayout.LayoutParams(-1, -1));
             cell.setTag(h);
             return cell;
         }
@@ -604,6 +825,7 @@ public class MainActivity extends Activity {
             FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(dp(28), dp(28), Gravity.BOTTOM | Gravity.END);
             blp.setMargins(0, 0, dp(5), dp(5));
             cell.addView(badge, blp);
+            cell.addView(makeSelectOverlay(), new FrameLayout.LayoutParams(-1, -1));
             return cell;
         }
     }
