@@ -332,6 +332,114 @@ final class Actions {
         });
     }
 
+    // ---------- Excel ----------
+
+    static final int REQ_SAVE_XLSX = 3;
+    static final String XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+    static String excelName(Activity a, File base) {
+        return "Carpetas - " + zipBaseName(a, base) + ".xlsx";
+    }
+
+    private static void writeExcel(Activity a, File base, OutputStream out) throws java.io.IOException {
+        File root = Storage.root(a);
+        java.util.List<java.util.List<java.util.List<Object>>> sheets = new ArrayList<>();
+        sheets.add(ExcelExport.folderTable(root, base));
+        sheets.add(ExcelExport.photoTable(root, base));
+        ExcelExport.writeXlsx(out, java.util.Arrays.asList("Carpetas", "Fotos y notas"), sheets);
+    }
+
+    /** Copia la tabla al portapapeles con tabulaciones: al pegar en Excel cada dato cae en su celda. */
+    static void copyForExcel(Activity a, File base, boolean photos) {
+        File root = Storage.root(a);
+        java.util.List<java.util.List<Object>> t = photos
+                ? ExcelExport.photoTable(root, base) : ExcelExport.folderTable(root, base);
+        if (t.size() <= 1) {
+            Toast.makeText(a, photos ? "No hay fotos para copiar" : "No hay carpetas para copiar", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        android.content.ClipboardManager cm =
+                (android.content.ClipboardManager) a.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        cm.setPrimaryClip(ClipData.newPlainText(photos ? "Fotos y notas" : "Carpetas", ExcelExport.toTsv(t)));
+        int rows = t.size() - 1;
+        new AlertDialog.Builder(a)
+                .setTitle("Lista copiada")
+                .setMessage("Se copiaron " + Storage.plural(rows, photos ? "foto" : "carpeta", photos ? "fotos" : "carpetas")
+                        + " con sus columnas (N°, Nivel 1, Nivel 2…).\n\n"
+                        + "En Excel, haz clic en la celda donde quieres que empiece la tabla y pega (Ctrl+V, o mantener presionado › Pegar). "
+                        + "Cada dato se ubicará en su propia celda.\n\n"
+                        + "Si lo pegas en WhatsApp o un correo para pasarlo a la computadora, luego cópialo desde ahí y pégalo en Excel.")
+                .setPositiveButton("Entendido", null)
+                .show();
+    }
+
+    static boolean startSaveExcel(Activity a, File base) {
+        Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        i.setType(XLSX_MIME);
+        i.putExtra(Intent.EXTRA_TITLE, excelName(a, base));
+        try {
+            a.startActivityForResult(i, REQ_SAVE_XLSX);
+            return true;
+        } catch (Exception e) {
+            Toast.makeText(a, "Este teléfono no permite elegir dónde guardar. Usa «Enviar archivo Excel».", Toast.LENGTH_LONG).show();
+            return false;
+        }
+    }
+
+    static void saveExcelTo(final Activity a, final File base, final Uri dest) {
+        final Handler ui = new Handler(Looper.getMainLooper());
+        new Thread(() -> {
+            boolean ok;
+            try (OutputStream out = a.getContentResolver().openOutputStream(dest, "w")) {
+                if (out == null) throw new java.io.IOException("sin salida");
+                writeExcel(a, base, out);
+                ok = true;
+            } catch (Exception e) {
+                ok = false;
+            }
+            final boolean done = ok;
+            ui.post(() -> Toast.makeText(a, done
+                    ? "Excel guardado: «" + excelName(a, base) + "»"
+                    : "No se pudo guardar el Excel", Toast.LENGTH_LONG).show());
+        }).start();
+    }
+
+    static void shareExcel(final Activity a, final File base) {
+        final Handler ui = new Handler(Looper.getMainLooper());
+        File dir = PhotoProvider.zipCacheDir(a);
+        File[] old = dir.listFiles();
+        if (old != null) for (File f : old) f.delete();
+        final File xlsx = new File(dir, excelName(a, base));
+        new Thread(() -> {
+            boolean ok;
+            try (OutputStream out = new java.io.FileOutputStream(xlsx)) {
+                writeExcel(a, base, out);
+                ok = true;
+            } catch (Exception e) {
+                ok = false;
+            }
+            final boolean done = ok;
+            ui.post(() -> {
+                if (!done) {
+                    Toast.makeText(a, "No se pudo crear el Excel", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                Uri uri = PhotoProvider.zipUriFor(a, xlsx);
+                Intent i = new Intent(Intent.ACTION_SEND);
+                i.setType(XLSX_MIME);
+                i.putExtra(Intent.EXTRA_STREAM, uri);
+                i.setClipData(ClipData.newRawUri("excel", uri));
+                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                try {
+                    a.startActivity(Intent.createChooser(i, "Enviar Excel"));
+                } catch (Exception e) {
+                    Toast.makeText(a, "No hay apps para enviar el archivo", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }).start();
+    }
+
     static boolean canExportToGallery() {
         return Build.VERSION.SDK_INT >= 29;
     }

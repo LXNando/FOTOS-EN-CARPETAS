@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
 
     private static final int REQ_CAMERA = 1;
     private static final int M_CONTINUOUS = 1, M_EXPORT = 2, M_INFO = 3, M_NEW_FOLDER = 4, M_ZIP_SAVE = 5, M_ZIP_SEND = 6,
-            M_SELECT = 7, M_MOVE_SEL = 8, M_SELECT_ALL = 9, M_DELETE_SEL = 10;
+            M_SELECT = 7, M_MOVE_SEL = 8, M_SELECT_ALL = 9, M_DELETE_SEL = 10, M_EXCEL = 11;
     private static final String PREFS = "ajustes", KEY_CONTINUOUS = "seguir_tomando";
 
     static final int PRIMARY = 0xFF1E6F5C;
@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
     private File current;
     private File pendingPhoto;
     private File pendingZipFolder;
+    private File pendingExcelFolder;
     private final List<File> items = new ArrayList<>();
     private int dirCount;
     private GridView grid;
@@ -90,6 +91,8 @@ public class MainActivity extends Activity {
             if (p != null) pendingPhoto = new File(p);
             String z = state.getString("pendingZip");
             if (z != null) pendingZipFolder = new File(z);
+            String x = state.getString("pendingExcel");
+            if (x != null) pendingExcelFolder = new File(x);
             selecting = state.getBoolean("selecting", false);
             ArrayList<String> sel = state.getStringArrayList("selected");
             if (sel != null) selected.addAll(sel);
@@ -367,6 +370,7 @@ public class MainActivity extends Activity {
         out.putString("current", current.getAbsolutePath());
         if (pendingPhoto != null) out.putString("pending", pendingPhoto.getAbsolutePath());
         if (pendingZipFolder != null) out.putString("pendingZip", pendingZipFolder.getAbsolutePath());
+        if (pendingExcelFolder != null) out.putString("pendingExcel", pendingExcelFolder.getAbsolutePath());
         out.putBoolean("selecting", selecting);
         out.putStringArrayList("selected", new ArrayList<>(selected));
     }
@@ -392,6 +396,7 @@ public class MainActivity extends Activity {
                 .setCheckable(true)
                 .setChecked(prefs().getBoolean(KEY_CONTINUOUS, false));
         boolean atRoot = current.equals(root);
+        menu.add(0, M_EXCEL, 2, atRoot ? "📊 Exportar lista a Excel" : "📊 Exportar esta carpeta a Excel");
         menu.add(0, M_ZIP_SAVE, 2, atRoot ? "Descargar todo como ZIP" : "Descargar esta carpeta como ZIP");
         menu.add(0, M_ZIP_SEND, 2, atRoot ? "Enviar todo como ZIP" : "Enviar esta carpeta como ZIP");
         if (Actions.canExportToGallery()) {
@@ -435,6 +440,9 @@ public class MainActivity extends Activity {
                 return true;
             case M_EXPORT:
                 Actions.exportToGallery(this, current);
+                return true;
+            case M_EXCEL:
+                showExcelOptions(current);
                 return true;
             case M_ZIP_SAVE:
                 saveZip(current);
@@ -516,6 +524,8 @@ public class MainActivity extends Activity {
         labels.add(dir ? "Compartir fotos" : "Compartir");
         actions.add(() -> Actions.share(this, dir ? Storage.listPhotos(f) : Collections.singletonList(f)));
         if (dir) {
+            labels.add("📊 Exportar a Excel");
+            actions.add(() -> showExcelOptions(f));
             labels.add("Descargar como ZIP");
             actions.add(() -> saveZip(f));
             labels.add("Enviar como ZIP");
@@ -531,6 +541,27 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this)
                 .setTitle(f.getName())
                 .setItems(labels.toArray(new String[0]), (d, which) -> actions.get(which).run())
+                .show();
+    }
+
+    /** Opciones para pasar los nombres de carpetas (y fotos/notas) a Excel. */
+    private void showExcelOptions(final File base) {
+        String[] labels = {
+                "📋  Copiar lista de carpetas (para pegar en Excel)",
+                "📋  Copiar lista de fotos y notas (para pegar en Excel)",
+                "💾  Guardar archivo Excel (.xlsx)",
+                "📤  Enviar archivo Excel (.xlsx)",
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Exportar «" + displayName(base) + "» a Excel")
+                .setItems(labels, (d, which) -> {
+                    switch (which) {
+                        case 0: Actions.copyForExcel(this, base, false); break;
+                        case 1: Actions.copyForExcel(this, base, true); break;
+                        case 2: if (Actions.startSaveExcel(this, base)) pendingExcelFolder = base; break;
+                        case 3: Actions.shareExcel(this, base); break;
+                    }
+                })
                 .show();
     }
 
@@ -621,6 +652,15 @@ public class MainActivity extends Activity {
             if (resultCode == RESULT_OK && data != null && data.getData() != null
                     && folder != null && folder.isDirectory()) {
                 Actions.saveZipTo(this, folder, data.getData());
+            }
+            return;
+        }
+        if (requestCode == Actions.REQ_SAVE_XLSX) {
+            File folder = pendingExcelFolder;
+            pendingExcelFolder = null;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null
+                    && folder != null && folder.isDirectory()) {
+                Actions.saveExcelTo(this, folder, data.getData());
             }
             return;
         }

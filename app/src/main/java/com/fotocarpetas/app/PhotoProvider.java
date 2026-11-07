@@ -114,6 +114,7 @@ public class PhotoProvider extends ContentProvider {
         if (n == null) return null;
         n = n.toLowerCase(Locale.ROOT);
         if (n.endsWith(".zip")) return "application/zip";
+        if (n.endsWith(".xlsx")) return Actions.XLSX_MIME;
         if (n.endsWith(".png")) return "image/png";
         if (n.endsWith(".webp")) return "image/webp";
         return "image/jpeg";

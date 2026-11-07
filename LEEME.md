@@ -12,6 +12,9 @@ App para celular Android que funciona **sin internet**:
   (se puede crear una nueva desde ahí). Para mover varias a la vez: «☑ Seleccionar varias»,
   marcar las que quieras y tocar «📂 Mover». Si ya existe algo con el mismo nombre, se renombra
   como «Nombre (2)», sin borrar nada. Las notas se mueven con su foto.
+- **Exportar a Excel** (menú ⋮ o mantener presionada una carpeta): copia la lista de carpetas
+  (o de fotos y notas) para pegarla directo en Excel, o crea un archivo .xlsx con dos hojas:
+  «Carpetas» (N°, Nivel 1, Nivel 2…, ruta, cantidad de fotos) y «Fotos y notas».
 - Mantener presionada una carpeta o foto para: renombrar, compartir, copiar a la Galería o eliminar.
 - Opción **«Seguir tomando fotos»** (menú ⋮): después de cada foto se vuelve a abrir la cámara, ideal para tomar muchas seguidas.
 - **«Descargar como ZIP»**: guarda una carpeta completa (con subcarpetas y fotos) en un solo archivo .zip, donde elijas: Descargas, Google Drive, etc.
