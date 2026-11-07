@@ -204,6 +204,7 @@ public class MainActivity extends Activity {
         }
         if (!root.exists()) root.mkdirs();
         items.clear();
+        noteCounts.clear();
         List<File> dirs = Storage.listDirs(current);
         dirCount = dirs.size();
         items.addAll(dirs);
@@ -464,6 +465,8 @@ public class MainActivity extends Activity {
                         + "Ubicación:\n" + root.getAbsolutePath() + "\n\n"
                         + "Desde una computadora (cable USB) la encuentras en:\nAndroid › data › " + getPackageName()
                         + " › files › Pictures › " + Storage.ROOT_NAME + "\n\n"
+                        + "Carpetas de color naranja con 📝: contienen fotos con notas "
+                        + "(borde continuo = notas en esa carpeta; borde punteado = notas dentro de sus subcarpetas).\n\n"
                         + "Importante: si desinstalas la app, Android borra estas fotos. "
                         + "Antes de desinstalar, usa «Copiar a la Galería» o «Compartir» para guardar una copia.")
                 .setPositiveButton("Entendido", null)
@@ -744,7 +747,48 @@ public class MainActivity extends Activity {
     }
 
     private static class FolderHolder {
-        TextView name, meta;
+        TextView name, meta, badge;
+        ImageView icon;
+        View card;
+    }
+
+    /** Notas por carpeta, calculadas una vez por cada actualización de pantalla. */
+    private final java.util.HashMap<String, int[]> noteCounts = new java.util.HashMap<>();
+
+    private int[] notesOf(File dir) {
+        int[] c = noteCounts.get(dir.getAbsolutePath());
+        if (c == null) {
+            c = Storage.noteCount(dir);
+            noteCounts.put(dir.getAbsolutePath(), c);
+        }
+        return c;
+    }
+
+    /**
+     * Carpeta con notas: fondo amarillo, ícono naranja con hoja y etiqueta «📝 N».
+     * Borde continuo = hay notas en esta carpeta; borde punteado = las notas están en sus subcarpetas.
+     */
+    private void bindFolderNotes(FolderHolder h, File f) {
+        int[] n = notesOf(f);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(14));
+        if (n[1] == 0) {
+            bg.setColor(Color.WHITE);
+            bg.setStroke(dp(1), 0xFFE1E6EA);
+            h.icon.setImageResource(R.drawable.ic_folder);
+            h.badge.setVisibility(View.GONE);
+            h.meta.setTextColor(0xFF7A8790);
+        } else {
+            boolean direct = n[0] > 0;
+            bg.setColor(direct ? 0xFFFFF1D6 : 0xFFFFF8EA);
+            if (direct) bg.setStroke(dp(2), 0xFFF28C38);
+            else bg.setStroke(dp(2), 0xFFF2A541, dp(6), dp(4));
+            h.icon.setImageResource(R.drawable.ic_folder_note);
+            h.badge.setVisibility(View.VISIBLE);
+            h.badge.setText("📝 " + n[1]);
+            h.meta.setTextColor(0xFFB4561A);
+        }
+        h.card.setBackground(bg);
     }
 
     private class Adapter extends BaseAdapter {
@@ -786,7 +830,15 @@ public class MainActivity extends Activity {
                 else if (c[0] == 0) meta = Storage.plural(c[1], "foto", "fotos");
                 else if (c[1] == 0) meta = Storage.plural(c[0], "carpeta", "carpetas");
                 else meta = c[1] + " fotos · " + c[0] + " carp.";
+                int[] notes = notesOf(f);
+                if (notes[1] > 0) {
+                    meta = notes[0] > 0
+                            ? Storage.plural(notes[1], "nota", "notas")
+                            + (notes[0] < notes[1] ? " (" + notes[0] + " aquí)" : "")
+                            : Storage.plural(notes[1], "nota", "notas") + " en subcarpetas";
+                }
                 h.meta.setText(meta);
+                bindFolderNotes(h, f);
                 bindSelection(convert, f);
             } else {
                 if (convert == null) convert = newPhotoCell();
@@ -817,6 +869,8 @@ public class MainActivity extends Activity {
             col.addView(icon, new LinearLayout.LayoutParams(dp(46), dp(46)));
 
             FolderHolder h = new FolderHolder();
+            h.icon = icon;
+            h.card = cell;
             h.name = new TextView(MainActivity.this);
             h.name.setTextColor(0xFF1F2A30);
             h.name.setTextSize(14);
@@ -835,6 +889,23 @@ public class MainActivity extends Activity {
             col.addView(h.meta, new LinearLayout.LayoutParams(-1, -2));
 
             cell.addView(col, new FrameLayout.LayoutParams(-1, -1));
+
+            h.badge = new TextView(MainActivity.this);
+            h.badge.setTextSize(11.5f);
+            h.badge.setTypeface(Typeface.DEFAULT_BOLD);
+            h.badge.setTextColor(Color.WHITE);
+            h.badge.setGravity(Gravity.CENTER);
+            h.badge.setPadding(dp(7), dp(2), dp(7), dp(2));
+            GradientDrawable pill = new GradientDrawable();
+            pill.setCornerRadius(dp(10));
+            pill.setColor(0xFFE0712A);
+            h.badge.setBackground(pill);
+            h.badge.setElevation(dp(2));
+            h.badge.setVisibility(View.GONE);
+            FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+            blp.setMargins(0, dp(6), dp(6), 0);
+            cell.addView(h.badge, blp);
+
             cell.addView(makeSelectOverlay(), new FrameLayout.LayoutParams(-1, -1));
             cell.setTag(h);
             return cell;

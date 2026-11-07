@@ -156,6 +156,26 @@ final class Storage {
         }
     }
 
+    /** {fotos con nota directamente en dir, fotos con nota en dir y todas sus subcarpetas}. */
+    static int[] noteCount(File dir) {
+        int[] c = new int[2];
+        noteCount(dir, c, true);
+        return c;
+    }
+
+    private static void noteCount(File dir, int[] c, boolean top) {
+        File[] fs = dir.listFiles();
+        if (fs == null) return;
+        for (File f : fs) {
+            if (f.isDirectory()) {
+                if (!f.getName().startsWith(".")) noteCount(f, c, false);
+            } else if (isPhoto(f) && hasNote(f)) {
+                c[1]++;
+                if (top) c[0]++;
+            }
+        }
+    }
+
     /** Borra una foto junto con su nota. */
     static boolean deletePhoto(File photo) {
         File n = noteFile(photo);

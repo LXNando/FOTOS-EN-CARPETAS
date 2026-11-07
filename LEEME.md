@@ -8,6 +8,9 @@ App para celular Android que funciona **sin internet**:
 - **Notas por foto**: en el visor toca «📝 Nota» para escribir una observación. Se muestra sobre la foto,
   las fotos con nota llevan un 📝 en la cuadrícula, y la nota se guarda como `.txt` con el mismo nombre
   de la foto (va incluida en los ZIP y se envía como texto al compartir).
+- **Carpetas con notas resaltadas**: si una carpeta contiene fotos con nota, se ve en color naranja
+  con la etiqueta «📝 N» (cantidad de notas). Borde continuo = notas en esa carpeta;
+  borde punteado = las notas están dentro de sus subcarpetas.
 - **Mover carpetas y fotos**: mantener presionado › «📂 Mover a…» y elegir la carpeta de destino
   (se puede crear una nueva desde ahí). Para mover varias a la vez: «☑ Seleccionar varias»,
   marcar las que quieras y tocar «📂 Mover». Si ya existe algo con el mismo nombre, se renombra

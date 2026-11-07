@@ -100,7 +100,8 @@ final class FolderPicker {
                     tv.setTextColor(0xFF4A5961);
                 } else {
                     int[] c = Storage.quickCount(f);
-                    tv.setText("📁   " + f.getName() + (c[0] > 0 ? "   ›" : ""));
+                    int notes = Storage.noteCount(f)[1];
+                    tv.setText("📁   " + f.getName() + (notes > 0 ? "   📝 " + notes : "") + (c[0] > 0 ? "   ›" : ""));
                     tv.setTextColor(0xFF1F2A30);
                 }
                 return tv;
