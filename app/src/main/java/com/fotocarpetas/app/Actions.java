@@ -343,29 +343,30 @@ final class Actions {
 
     private static void writeExcel(Activity a, File base, OutputStream out) throws java.io.IOException {
         File root = Storage.root(a);
-        java.util.List<java.util.List<java.util.List<Object>>> sheets = new ArrayList<>();
-        sheets.add(ExcelExport.folderTable(root, base));
-        sheets.add(ExcelExport.photoTable(root, base));
-        ExcelExport.writeXlsx(out, java.util.Arrays.asList("Carpetas", "Fotos y notas"), sheets);
+        java.util.List<ExcelExport.Sheet> sheets = new ArrayList<>();
+        sheets.add(ExcelExport.folderSheet(root, base));
+        sheets.add(ExcelExport.photoSheet(root, base));
+        ExcelExport.writeXlsx(out, sheets);
     }
 
     /** Copia la tabla al portapapeles con tabulaciones: al pegar en Excel cada dato cae en su celda. */
     static void copyForExcel(Activity a, File base, boolean photos) {
         File root = Storage.root(a);
-        java.util.List<java.util.List<Object>> t = photos
-                ? ExcelExport.photoTable(root, base) : ExcelExport.folderTable(root, base);
-        if (t.size() <= 1) {
+        ExcelExport.Sheet t = photos
+                ? ExcelExport.photoSheet(root, base) : ExcelExport.folderSheet(root, base);
+        if (t.rows.isEmpty()) {
             Toast.makeText(a, photos ? "No hay fotos para copiar" : "No hay carpetas para copiar", Toast.LENGTH_SHORT).show();
             return;
         }
         android.content.ClipboardManager cm =
                 (android.content.ClipboardManager) a.getSystemService(android.content.Context.CLIPBOARD_SERVICE);
         cm.setPrimaryClip(ClipData.newPlainText(photos ? "Fotos y notas" : "Carpetas", ExcelExport.toTsv(t)));
-        int rows = t.size() - 1;
+        int rows = t.rows.size();
         new AlertDialog.Builder(a)
                 .setTitle("Lista copiada")
                 .setMessage("Se copiaron " + Storage.plural(rows, photos ? "foto" : "carpeta", photos ? "fotos" : "carpetas")
-                        + " con sus columnas (N°, Nivel 1, Nivel 2…).\n\n"
+                        + (photos ? " con sus columnas (N°, Nivel 1, Nivel 2…, Foto, Fecha, Nota).\n\n"
+                        : " con sus columnas (N°, Nivel 1, Nivel 2…, Fotos, Notas de las fotos).\n\n")
                         + "En Excel, haz clic en la celda donde quieres que empiece la tabla y pega (Ctrl+V, o mantener presionado › Pegar). "
                         + "Cada dato se ubicará en su propia celda.\n\n"
                         + "Si lo pegas en WhatsApp o un correo para pasarlo a la computadora, luego cópialo desde ahí y pégalo en Excel.")
